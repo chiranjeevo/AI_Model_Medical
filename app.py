@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import joblib
@@ -14,7 +15,21 @@ mlb = joblib.load("mlb.pkl")
 enc = joblib.load("encoder.pkl")
 known_symptoms = list(mlb.classes_)
 
+# ----------------------------------
+# App
+# ----------------------------------
 app = FastAPI(title="Conversational Disease Prediction API")
+
+# ----------------------------------
+# CORS (VERY IMPORTANT)
+# ----------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # allow all (safe for demo)
+    allow_credentials=True,
+    allow_methods=["*"],   # allow POST, GET, OPTIONS
+    allow_headers=["*"],
+)
 
 # ----------------------------------
 # In-Memory Session Storage
@@ -75,7 +90,7 @@ def start_diagnosis(data: StartRequest):
         "age_group": data.age_group,
         "gender": data.gender
     }
-    #print(sessions)
+
     return {
         "session_id": session_id,
         "questions": remaining
@@ -91,10 +106,8 @@ def final_prediction(data: AnswerRequest):
         return {"error": "Invalid session ID"}
 
     session = sessions[data.session_id]
-
     final_symptoms = list(set(session["symptoms"] + data.yes_symptoms))
 
-    # Binary symptom vector
     symptom_vector = mlb.transform([final_symptoms])
     df = pd.DataFrame(symptom_vector, columns=mlb.classes_)
 
@@ -118,9 +131,8 @@ def final_prediction(data: AnswerRequest):
     df = pd.concat([df, cat_df], axis=1)
     df = df.reindex(columns=model.feature_names_in_, fill_value=0)
 
-
-
     probs = model.predict_proba(df)[0]
+
     result = pd.DataFrame({
         "Disease": model.classes_,
         "Probability": probs
@@ -138,4 +150,4 @@ def final_prediction(data: AnswerRequest):
 # ----------------------------------
 @app.get("/")
 def root():
-    return {"message": "Disease Prediction Conversational API Running"}
+    return {"message": "Disease Prediction API is running 🚀"}
